@@ -14,47 +14,41 @@
       # mkGhBinary builds a derivation from a goreleaser-style GitHub release
       # tarball (one binary at the top, plus README/LICENSE). The binary inside
       # may not match the repo name — pass `binary` to override.
+      #
+      # Uses runCommand instead of stdenv.mkDerivation: these tarballs
+      # contain pre-built binaries, no compilation needed. Dropping the C
+      # toolchain shrinks the per-peer install closure dramatically — the
+      # ~400 MB stdenv-linux + gcc-wrapper + binutils-wrapper download that
+      # every first-time peer install would otherwise pay disappears.
       mkGhBinary = pkgs: { owner, repo, version, sha256, binary ? repo, ... }:
-        pkgs.stdenv.mkDerivation {
-          pname = repo;
-          inherit version;
+        pkgs.runCommand "${repo}-${version}" {
           src = pkgs.fetchurl {
             url = "https://github.com/${owner}/${repo}/releases/download/v${version}/${repo}_${version}_linux_amd64.tar.gz";
             inherit sha256;
           };
-          # Tarballs have files directly at the root (no enclosing dir), so
-          # tell stdenv not to look for a "${pname}-${version}" subdir.
-          sourceRoot = ".";
-          dontConfigure = true;
-          dontBuild = true;
-          # The tarball may be just the binary + LICENSE/README at the root,
-          # OR it may extract into a subdir. Find the executable wherever it
-          # lives (within 3 levels) and install it as $binary.
-          installPhase = ''
-            runHook preInstall
-            mkdir -p $out/bin
-            found=$(find . -maxdepth 3 -type f -perm -u+x \
-              ! -iname '*.txt' ! -iname '*.md' ! -iname 'license*' \
-              ! -iname 'readme*' ! -iname 'changelog*' \
-              | head -1)
-            if [ -z "$found" ]; then
-              echo "ERROR: no executable found in $(pwd)" >&2
-              find . -maxdepth 3 -type f | head -10 >&2
-              exit 1
-            fi
-            install -m 0755 "$found" "$out/bin/${binary}"
-            runHook postInstall
-          '';
+          nativeBuildInputs = [ pkgs.gnutar pkgs.gzip pkgs.findutils pkgs.coreutils ];
           meta = with pkgs.lib; {
             description = "Pre-built binary release of ${owner}/${repo}";
             homepage = "https://github.com/${owner}/${repo}";
             platforms = platforms.linux;
-            # Maritime curates these — assume permissive licensing per the
-            # upstream repos. Override per-package if any of them changes.
             license = licenses.mit;
             mainProgram = binary;
           };
-        };
+        } ''
+          mkdir -p $out/bin
+          cd $(mktemp -d)
+          tar -xzf $src
+          found=$(find . -maxdepth 3 -type f -perm -u+x \
+            ! -iname '*.txt' ! -iname '*.md' ! -iname 'license*' \
+            ! -iname 'readme*' ! -iname 'changelog*' \
+            | head -1)
+          if [ -z "$found" ]; then
+            echo "ERROR: no executable found in $(pwd)" >&2
+            find . -maxdepth 3 -type f | head -10 >&2
+            exit 1
+          fi
+          install -m 0755 "$found" "$out/bin/${binary}"
+        '';
     in
     {
       packages = forAllSystems (system:
