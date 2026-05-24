@@ -173,11 +173,15 @@
           # MCP server runtime + CLI. Published only to npm, no Linux
           # release tarball.
           #
-          # The pattern for npm CLIs: a wrapper package.json/lock under
-          # ./npm/<name>/ pins the target as its single dependency.
+          # The pattern for pure-JS npm CLIs: a wrapper package.json/lock
+          # under ./npm/<name>/ pins the target as its single dependency.
           # buildNpmPackage fetches every dep into a hermetic store path
-          # (no network at build time), then we symlink the bin from the
-          # installed node_modules into $out/bin.
+          # (no network at build time), then a postInstall wraps the JS
+          # entry with `${pkgs.nodejs}/bin/node` into $out/bin/<name>.
+          #
+          # For npm packages that ship platform-specific binaries (claude,
+          # opencode) the postInstall symlinks the native binary directly
+          # — no node wrapper needed.
           mcporter = pkgs.buildNpmPackage rec {
             pname = "mcporter";
             version = "0.11.3";
@@ -205,13 +209,100 @@
             };
           };
 
+          # Anthropic's Claude Code CLI. npm package ships a platform-
+          # specific native binary at
+          # node_modules/@anthropic-ai/claude-code-linux-x64/claude.
+          claude-code = pkgs.buildNpmPackage rec {
+            pname = "claude-code";
+            version = "2.1.150";
+            src = ./npm/claude;
+            npmDepsHash = "sha256-JVpx8B7XM0yGb0eWktuPy+WjW8TSYfLwDaXIBr8u7jw=";
+            dontNpmBuild = true;
+            postInstall = ''
+              mkdir -p $out/bin
+              ln -s \
+                $out/lib/node_modules/maritime-claude-wrapper/node_modules/@anthropic-ai/claude-code-linux-x64/claude \
+                $out/bin/claude
+            '';
+            meta = with pkgs.lib; {
+              description = "Anthropic's Claude Code coding agent CLI";
+              homepage = "https://docs.anthropic.com/claude/docs/claude-code";
+              platforms = [ "x86_64-linux" ];
+              license = licenses.mit;
+              mainProgram = "claude";
+            };
+          };
+
+          # OpenAI's Codex CLI. npm package ships a pure-JS entry at
+          # node_modules/@openai/codex/bin/codex.js; we wrap it with node.
+          codex = pkgs.buildNpmPackage rec {
+            pname = "codex";
+            version = "0.133.0";
+            src = ./npm/codex;
+            npmDepsHash = "sha256-q+MZBgcre/RWEX/pU0/vLJyWUAI3WltoSKObVZ9Aj0Q=";
+            dontNpmBuild = true;
+            postInstall = ''
+              chmod +x $out/lib/node_modules/maritime-codex-wrapper/node_modules/@openai/codex/bin/codex.js
+              mkdir -p $out/bin
+              cat > $out/bin/codex <<EOF
+              #!/bin/sh
+              exec ${pkgs.nodejs}/bin/node $out/lib/node_modules/maritime-codex-wrapper/node_modules/@openai/codex/bin/codex.js "\$@"
+              EOF
+              chmod +x $out/bin/codex
+            '';
+            meta = with pkgs.lib; {
+              description = "OpenAI Codex CLI";
+              homepage = "https://github.com/openai/codex";
+              platforms = platforms.linux;
+              license = licenses.mit;
+              mainProgram = "codex";
+            };
+          };
+
+          # SST's OpenCode coding agent. npm package ships platform-
+          # specific native binaries; we symlink the standard linux-x64
+          # variant. baseline/musl variants exist for older glibc / musl
+          # but the standard one works on every Maritime host.
+          opencode = pkgs.buildNpmPackage rec {
+            pname = "opencode";
+            version = "1.15.10";
+            src = ./npm/opencode;
+            npmDepsHash = "sha256-fYvR8ejGdb5A8H7ND4Fz7uN0MRPwkfXTFrWtkLkKjWU=";
+            dontNpmBuild = true;
+            # opencode-ai ships platform-specific variants as optionalDependencies
+            # (opencode-linux-x64, opencode-linux-x64-musl, etc.). Pull them all
+            # with --include=optional. Skip the upstream postinstall script
+            # (which runtime-detects the variant and errors out under Nix's
+            # sandbox) — we symlink the linux-x64 variant ourselves below.
+            npmInstallFlags = [ "--include=optional" ];
+            # --ignore-scripts on npmFlags (not just npmInstallFlags) so the
+            # postinstall lifecycle script doesn't run. opencode-ai's
+            # postinstall.mjs does a runtime platform detection that fails
+            # under Nix's build sandbox; we bypass it and symlink the
+            # linux-x64 variant directly in postInstall below.
+            npmFlags = [ "--ignore-scripts" ];
+            postInstall = ''
+              mkdir -p $out/bin
+              ln -s \
+                $out/lib/node_modules/maritime-opencode-wrapper/node_modules/opencode-linux-x64/bin/opencode \
+                $out/bin/opencode
+            '';
+            meta = with pkgs.lib; {
+              description = "OpenCode AI coding agent CLI";
+              homepage = "https://opencode.ai";
+              platforms = [ "x86_64-linux" ];
+              license = licenses.mit;
+              mainProgram = "opencode";
+            };
+          };
+
           # Build all binaries in one go (handy for `nix build .#all`).
           all = pkgs.symlinkJoin {
             name = "maritime-skill-binaries";
             paths = [
               gog goplaces gifgrep wacli
               sag sonoscli ordercli camsnap blucli openhue
-              mcporter
+              mcporter claude-code codex opencode
             ];
           };
         });
