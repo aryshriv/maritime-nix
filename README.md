@@ -40,6 +40,7 @@ land on the next install.
 | `camsnap` | `camsnap` | https://github.com/steipete/camsnap              | RTSP/ONVIF camera capture     |
 | `blucli`  | `blu`     | https://github.com/steipete/blucli               | BluOS player control          |
 | `openhue` | `openhue` | https://github.com/openhue/openhue-cli           | Philips Hue lights            |
+| `pi`      | `pi`      | https://github.com/earendil-works/pi             | coding-agent (Pi, Bun standalone) |
 
 ### npm-distributed CLIs
 

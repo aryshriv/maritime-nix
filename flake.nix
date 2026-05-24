@@ -385,6 +385,46 @@
             };
           };
 
+          # Pi coding agent — earendil-works/pi. Distributed as a
+          # Bun-compiled standalone binary in a tarball that also
+          # ships sidecar files (photon_rs_bg.wasm + a native
+          # @mariozechner/clipboard .node module). The mkGhBinary
+          # helper only extracts a single executable, so we use a
+          # custom unpack that preserves the whole pi/ directory
+          # under $out/share/pi and wraps it.
+          #
+          # dontStrip + dontPatchELF: the binary embeds the JS
+          # runtime/source — strip mangles it, and we want it to use
+          # the *container's* glibc loader (every Maritime base image
+          # has /lib64/ld-linux-x86-64.so.2), not nixpkgs's.
+          pi = pkgs.runCommand "pi-0.75.5" {
+            src = pkgs.fetchurl {
+              url = "https://github.com/earendil-works/pi/releases/download/v0.75.5/pi-linux-x64.tar.gz";
+              sha256 = "sha256-rGh6zXJwXavpZ/1A02Uxf2gFSHi+HLLArpoFkv0Qi10=";
+            };
+            nativeBuildInputs = [ pkgs.gnutar pkgs.gzip ];
+            dontStrip = true;
+            dontPatchELF = true;
+            meta = with pkgs.lib; {
+              description = "Pi coding agent (Bun-compiled standalone CLI)";
+              homepage = "https://github.com/earendil-works/pi";
+              platforms = [ "x86_64-linux" ];
+              license = licenses.mit;
+              mainProgram = "pi";
+            };
+          } ''
+            mkdir -p $out/share/pi $out/bin
+            cd $(mktemp -d)
+            tar -xzf $src
+            cp -r pi/. $out/share/pi/
+            chmod +x $out/share/pi/pi
+            cat > $out/bin/pi <<EOF
+            #!/bin/sh
+            exec $out/share/pi/pi "\$@"
+            EOF
+            chmod +x $out/bin/pi
+          '';
+
           # Build all binaries in one go (handy for `nix build .#all`).
           all = pkgs.symlinkJoin {
             name = "maritime-skill-binaries";
@@ -392,7 +432,7 @@
               gog goplaces gifgrep wacli
               sag sonoscli ordercli camsnap blucli openhue
               mcporter claude-code codex opencode
-              clawhub summarize oracle
+              clawhub summarize oracle pi
             ];
           };
         });
