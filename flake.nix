@@ -169,12 +169,49 @@
             binary = "openhue";
           };
 
+          # ── npm-distributed CLIs ──────────────────────────────────────
+          # MCP server runtime + CLI. Published only to npm, no Linux
+          # release tarball.
+          #
+          # The pattern for npm CLIs: a wrapper package.json/lock under
+          # ./npm/<name>/ pins the target as its single dependency.
+          # buildNpmPackage fetches every dep into a hermetic store path
+          # (no network at build time), then we symlink the bin from the
+          # installed node_modules into $out/bin.
+          mcporter = pkgs.buildNpmPackage rec {
+            pname = "mcporter";
+            version = "0.11.3";
+            src = ./npm/mcporter;
+            npmDepsHash = "sha256-chT9tZ0EiXH8pWdSbdIFvfwx+vh/rC5P+P19fvXof5A=";
+            # mcporter's npm package ships pre-built dist/, no build step.
+            dontNpmBuild = true;
+            # The wrapper package.json doesn't define a bin — symlink the
+            # real CLI entry out of node_modules/mcporter/dist/cli.js.
+            postInstall = ''
+              chmod +x $out/lib/node_modules/maritime-mcporter-wrapper/node_modules/mcporter/dist/cli.js
+              mkdir -p $out/bin
+              cat > $out/bin/mcporter <<EOF
+              #!/bin/sh
+              exec ${pkgs.nodejs}/bin/node $out/lib/node_modules/maritime-mcporter-wrapper/node_modules/mcporter/dist/cli.js "\$@"
+              EOF
+              chmod +x $out/bin/mcporter
+            '';
+            meta = with pkgs.lib; {
+              description = "MCP server runtime + CLI (npm: mcporter)";
+              homepage = "https://github.com/openclaw/mcporter";
+              platforms = platforms.linux;
+              license = licenses.mit;
+              mainProgram = "mcporter";
+            };
+          };
+
           # Build all binaries in one go (handy for `nix build .#all`).
           all = pkgs.symlinkJoin {
             name = "maritime-skill-binaries";
             paths = [
               gog goplaces gifgrep wacli
               sag sonoscli ordercli camsnap blucli openhue
+              mcporter
             ];
           };
         });

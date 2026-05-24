@@ -1,0 +1,8 @@
+{
+  "name": "maritime-mcporter-wrapper",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "mcporter": "0.11.3"
+  }
+}
