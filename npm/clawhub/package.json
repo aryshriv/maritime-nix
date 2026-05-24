@@ -1,0 +1,8 @@
+{
+  "name": "maritime-clawhub-wrapper",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "clawhub": "0.17.0"
+  }
+}

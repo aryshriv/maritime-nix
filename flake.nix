@@ -296,6 +296,95 @@
             };
           };
 
+          # OpenClaw skill registry CLI (clawhub installs/searches/etc.).
+          # npm package ships pure JS. The two declared bin entries
+          # (clawhub, clawdhub) actually point at the SAME file
+          # (clawdhub.js) — upstream treats them as aliases.
+          clawhub = pkgs.buildNpmPackage rec {
+            pname = "clawhub";
+            version = "0.17.0";
+            src = ./npm/clawhub;
+            npmDepsHash = "sha256-en+EItG3joglvX1dI3QVipd527U5xARgiIHiHZoB2aY=";
+            dontNpmBuild = true;
+            postInstall = ''
+              chmod +x $out/lib/node_modules/maritime-clawhub-wrapper/node_modules/clawhub/bin/clawdhub.js
+              mkdir -p $out/bin
+              for name in clawhub clawdhub; do
+                cat > $out/bin/$name <<EOF
+              #!/bin/sh
+              exec ${pkgs.nodejs}/bin/node $out/lib/node_modules/maritime-clawhub-wrapper/node_modules/clawhub/bin/clawdhub.js "\$@"
+              EOF
+                chmod +x $out/bin/$name
+              done
+            '';
+            meta = with pkgs.lib; {
+              description = "ClawHub: OpenClaw skill registry CLI";
+              homepage = "https://github.com/openclaw/clawhub";
+              platforms = platforms.linux;
+              license = licenses.mit;
+              mainProgram = "clawhub";
+            };
+          };
+
+          # URL/article summarization CLI.
+          summarize = pkgs.buildNpmPackage rec {
+            pname = "summarize";
+            version = "0.16.3";
+            src = ./npm/summarize;
+            npmDepsHash = "sha256-eZFpf/RJhD5eenkcG9KfMpVAiMy14aj7MeiRVnO5Th8=";
+            dontNpmBuild = true;
+            postInstall = ''
+              chmod +x $out/lib/node_modules/maritime-summarize-wrapper/node_modules/@steipete/summarize/dist/cli.js
+              mkdir -p $out/bin
+              for name in summarize summarizer; do
+                cat > $out/bin/$name <<EOF
+              #!/bin/sh
+              exec ${pkgs.nodejs}/bin/node $out/lib/node_modules/maritime-summarize-wrapper/node_modules/@steipete/summarize/dist/cli.js "\$@"
+              EOF
+                chmod +x $out/bin/$name
+              done
+            '';
+            meta = with pkgs.lib; {
+              description = "URL/article summarization CLI";
+              homepage = "https://github.com/steipete/summarize";
+              platforms = platforms.linux;
+              license = licenses.mit;
+              mainProgram = "summarize";
+            };
+          };
+
+          # Multi-LLM second-opinion CLI: bundles prompts + files and
+          # asks Claude / OpenAI / Gemini for review or debugging.
+          oracle = pkgs.buildNpmPackage rec {
+            pname = "oracle";
+            version = "0.13.0";
+            src = ./npm/oracle;
+            npmDepsHash = "sha256-1aTLZbxL8OPNWeNAA1n+K5dONQz67iDz5S/M9Hcou0o=";
+            dontNpmBuild = true;
+            postInstall = ''
+              chmod +x $out/lib/node_modules/maritime-oracle-wrapper/node_modules/@steipete/oracle/dist/bin/oracle-cli.js
+              chmod +x $out/lib/node_modules/maritime-oracle-wrapper/node_modules/@steipete/oracle/dist/bin/oracle-mcp.js
+              mkdir -p $out/bin
+              cat > $out/bin/oracle <<EOF
+              #!/bin/sh
+              exec ${pkgs.nodejs}/bin/node $out/lib/node_modules/maritime-oracle-wrapper/node_modules/@steipete/oracle/dist/bin/oracle-cli.js "\$@"
+              EOF
+              chmod +x $out/bin/oracle
+              cat > $out/bin/oracle-mcp <<EOF
+              #!/bin/sh
+              exec ${pkgs.nodejs}/bin/node $out/lib/node_modules/maritime-oracle-wrapper/node_modules/@steipete/oracle/dist/bin/oracle-mcp.js "\$@"
+              EOF
+              chmod +x $out/bin/oracle-mcp
+            '';
+            meta = with pkgs.lib; {
+              description = "Multi-model second-opinion CLI (Claude/OpenAI/Gemini)";
+              homepage = "https://github.com/steipete/oracle";
+              platforms = platforms.linux;
+              license = licenses.mit;
+              mainProgram = "oracle";
+            };
+          };
+
           # Build all binaries in one go (handy for `nix build .#all`).
           all = pkgs.symlinkJoin {
             name = "maritime-skill-binaries";
@@ -303,6 +392,7 @@
               gog goplaces gifgrep wacli
               sag sonoscli ordercli camsnap blucli openhue
               mcporter claude-code codex opencode
+              clawhub summarize oracle
             ];
           };
         });

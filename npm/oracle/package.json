@@ -1,0 +1,8 @@
+{
+  "name": "maritime-oracle-wrapper",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "@steipete/oracle": "0.13.0"
+  }
+}

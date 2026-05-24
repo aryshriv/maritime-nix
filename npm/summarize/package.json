@@ -1,0 +1,8 @@
+{
+  "name": "maritime-summarize-wrapper",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "@steipete/summarize": "0.16.3"
+  }
+}
